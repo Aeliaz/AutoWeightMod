@@ -1,5 +1,0 @@
-D:\Jeux\Les Naufragés - Serveur\Github\AutoWeightMod\obj\Debug\netstandard2.0\AutoWeightMod.csproj.AssemblyReference.cache
-D:\Jeux\Les Naufragés - Serveur\Github\AutoWeightMod\obj\Debug\netstandard2.0\AutoWeightMod.GeneratedMSBuildEditorConfig.editorconfig
-D:\Jeux\Les Naufragés - Serveur\Github\AutoWeightMod\obj\Debug\netstandard2.0\AutoWeightMod.AssemblyInfoInputs.cache
-D:\Jeux\Les Naufragés - Serveur\Github\AutoWeightMod\obj\Debug\netstandard2.0\AutoWeightMod.AssemblyInfo.cs
-D:\Jeux\Les Naufragés - Serveur\Github\AutoWeightMod\obj\Debug\netstandard2.0\AutoWeightMod.csproj.CoreCompileInputs.cache
