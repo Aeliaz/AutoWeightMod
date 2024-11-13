@@ -1,0 +1,11 @@
+{
+    "type": "code",
+    "name": "Weight Mod",
+    "modid": "weightmod",
+    "version": "1.0.0",
+    "description": "Add weight system to items and inventory",
+    "authors": ["Aeliaz"],
+    "dependencies": {
+        "game": ""
+    }
+}
