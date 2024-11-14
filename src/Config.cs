@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -79,10 +79,30 @@ namespace WeightMod.src
             {"glass", 0.7f},
             {"gem", 1.0f}
         };
-        // Ajoutez cette section dans Config.cs
         public Dictionary<string, float> classBonuses { get; set; } = new Dictionary<string, float>();
-
-
         public string HUD_POSITION { get; set; } = "saturationstatbar";
+        public string UNKNOWN_CATEGORY { get; set; } = "Unknown";
+
+        // Méthode GetItemWeight ajoutée ici
+        public ItemWeightInfo GetItemWeight(string itemCode)
+        {
+            // Vérifie si l'item a un poids spécifique défini dans WEIGHTS_FOR_ITEMS
+            if (WEIGHTS_FOR_ITEMS.TryGetValue(itemCode, out var itemWeightInfo))
+            {
+                return itemWeightInfo;
+            }
+
+            // Sinon, vérifie si l'item appartient à une catégorie de poids de BASE_WEIGHTS_BY_CATEGORY
+            foreach (var category in BASE_WEIGHTS_BY_CATEGORY)
+            {
+                if (itemCode.Contains(category.Key))
+                {
+                    return new ItemWeightInfo { Weight = category.Value, Category = category.Key };
+                }
+            }
+
+            // Si aucune correspondance, retourne un ItemWeightInfo indiquant une catégorie inconnue
+            return new ItemWeightInfo { Category = "Unknown" };
+        }
     }
 }
