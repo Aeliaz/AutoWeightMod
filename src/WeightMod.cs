@@ -17,6 +17,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Server;
 using Config = WeightMod.src.Config;
+using WeightMod.src;
 
 namespace WeightMod.src
 {
@@ -50,59 +51,131 @@ namespace WeightMod.src
         {
             if (block?.Code == null) return;
 
-    // S'assure que les attributs du bloc ne sont pas nuls
+            // S'assure que les attributs du bloc ne sont pas nuls
             block.EnsureAttributesNotNull();
 
             string blockCode = block.Code.ToString();
-    
-    // Utilisation de WildCard pour filtrer les blocs avec un motif spécifique (exemple : "stone-*")
-            if (!block.WildCardMatchExt("stone-*")) return;
 
-            if (!Config.WEIGHTS_FOR_BLOCKS.ContainsKey(blockCode))
+            // Utiliser un code générique pour le type de bloc en retirant le suffixe de la variante
+            string genericCode = GetGenericBlockCode(blockCode);
+        
+            // Si le modèle générique n'existe pas encore dans la configuration, on l'ajoute
+            if (!Config.WEIGHTS_FOR_BLOCKS.ContainsKey(genericCode))
             {
                 var categorizer = new ItemCategorizer(sapi, Config);
                 string category = ItemCategorizer.DetermineCategory(block);
                 var baseWeight = categorizer.CalculateBaseWeight(block, category);
-
-                Config.WEIGHTS_FOR_BLOCKS[blockCode] = new ItemWeightInfo
+        
+                // Ajouter le poids pour le modèle générique
+                Config.WEIGHTS_FOR_BLOCKS[genericCode] = new ItemWeightInfo
                 {
                     Weight = baseWeight,
                     Category = category
                 };
-
-                sapi.Logger.Debug($"Added block weight: {blockCode} = {baseWeight}");
+        
+                sapi.Logger.Debug($"Added block weight for generic code: {genericCode} = {baseWeight}");
             }
+            else
+            {
+                sapi.Logger.Debug($"Skipped duplicate variant: {blockCode} (using generic code {genericCode})");
+            }
+        }
+        
+        // Fonction auxiliaire pour obtenir le code générique en retirant le suffixe
+        private string GetGenericBlockCode(string blockCode)
+        {
+            // Sépare le code en segments en utilisant des tirets comme délimiteurs
+            var segments = blockCode.Split('-').ToList();
+
+            // Liste des valeurs typiques détectées comme variantes dans les segments
+            HashSet<string> variablePatterns = new HashSet<string>
+            {
+                "north", "south", "east", "west", "n", "s", "e", "w",
+                "ne", "nw", "se", "sw", "closed", "opened", "poor", "medium", "rich", 
+                "bountiful", "1", "2", "3", "4", "5", "6", "n1", "n2", "0", "p1", "p2"
+            };
+        
+            // Parcourt chaque segment et remplace les segments "variables" par un '*'
+            for (int i = 0; i < segments.Count; i++)
+            {
+                string segment = segments[i];
+        
+                // Remplace le segment s'il est un motif variable ou un chiffre unique
+                if (variablePatterns.Contains(segment) || int.TryParse(segment, out _))
+                {
+                    segments[i] = "*";
+                }
+            }
+        
+            // Reconstruit le code avec les segments restants, en remplaçant les segments variables par '-*'
+            string genericCode = string.Join("-", segments);
+            
+            // Supprime les éventuels doubles '–*' consécutifs en cas de succession de segments variables
+            return genericCode.Replace("-*", "*").Replace("*-", "*");
         }
 
         private void ProcessItemWeight(Item item)
         {
             if (item?.Code == null) return;
-        
+
             // S'assure que les attributs de l'item ne sont pas nuls
             item.EnsureAttributesNotNull();
-
+        
             string itemCode = item.Code.ToString();
-    
-            // Utilisation de WildCard pour filtrer les items avec un motif spécifique (exemple : "wood-*")
-            if (!item.WildCardMatchExt("wood-*")) return;
 
-            if (!Config.WEIGHTS_FOR_ITEMS.ContainsKey(itemCode))
+            // Utiliser un code générique pour le type d'item en retirant le suffixe de la variante
+            string genericCode = GetGenericItemCode(itemCode);
+
+            // Si le modèle générique n'existe pas encore dans la configuration, on l'ajoute
+            if (!Config.WEIGHTS_FOR_ITEMS.ContainsKey(genericCode))
             {
                 var categorizer = new ItemCategorizer(sapi, Config);
                 string category = ItemCategorizer.DetermineCategory(item);
                 var baseWeight = categorizer.CalculateBaseWeight(item, category);
-
-                Config.WEIGHTS_FOR_ITEMS[itemCode] = new ItemWeightInfo
+        
+                // Ajouter le poids pour le modèle générique
+                Config.WEIGHTS_FOR_ITEMS[genericCode] = new ItemWeightInfo
                 {
                     Weight = baseWeight,
                     Category = category
                 };
-
-        sapi.Logger.Debug($"Added item weight: {itemCode} = {baseWeight}");
-    }
-}
-
-
+        
+                sapi.Logger.Debug($"Added item weight for generic code: {genericCode} = {baseWeight}");
+            }
+            else
+            {
+                sapi.Logger.Debug($"Skipped duplicate variant: {itemCode} (using generic code {genericCode})");
+            }
+        }
+        
+        // Fonction auxiliaire pour obtenir le code générique en retirant les segments variables dans le nom de l'item
+        private string GetGenericItemCode(string itemCode)
+        {
+            // Divise l'itemCode en segments séparés par des tirets
+            var segments = itemCode.Split('-');
+    
+            // Cherche les parties communes pour chaque segment entre items avec le même préfixe
+            var genericSegments = new List<string>();
+        
+            foreach (var segment in segments)
+            {
+                // Filtre les segments contenant uniquement des chiffres ou certains mots courants indiquant une variation
+                if (int.TryParse(segment, out _) || segment == "north" || segment == "south" || segment == "east" ||
+                    segment == "west" || segment == "top" || segment == "bottom" || segment == "lower" || segment == "upper")
+                {
+                    genericSegments.Add("*");
+                   break; // Ne pas ajouter les segments suivants après la première partie variable détectée
+                }
+                else
+                {
+                    genericSegments.Add(segment);
+                }
+            }
+        
+            // Recombine les segments avec des tirets
+            return string.Join("-", genericSegments);
+        }
+        
         public void OnPlayerNowPlaying(IServerPlayer byPlayer)
         {
             var ep = new EntityBehaviorWeightable(byPlayer.Entity);
@@ -145,6 +218,25 @@ namespace WeightMod.src
                 prefix: new HarmonyMethod(typeof(harmPatch).GetMethod("Prefix_ApplicableInLiquid")));
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityOnGround).GetMethod("Applicable"), 
                 prefix: new HarmonyMethod(typeof(harmPatch).GetMethod("Prefix_ApplicableOnGround")));
+        }
+        public override void StartClientSide(ICoreClientAPI api)
+        {
+            capi = api;
+            base.StartClientSide(api);
+
+            clientChannel = capi.Network.RegisterChannel("weightmod")
+                .RegisterMessageType(typeof(syncWeightPacket))
+                .SetMessageHandler<syncWeightPacket>(OnReceiveWeightData);
+        
+            sapi.Logger.Notification("Client-side network channel 'weightmod' registered.");
+        }
+
+        // Gestionnaire pour le message reçu
+        private void OnReceiveWeightData(syncWeightPacket packet)
+        {
+            // Log pour confirmer la réception des données
+            capi.Logger.Debug("Received weight data packet from server.");
+            // Vous pouvez traiter les données ici
         }
 
         public override void StartServerSide(ICoreServerAPI api)
@@ -284,34 +376,45 @@ namespace WeightMod.src
             foreach (var block in sapi.World.Blocks)
             {
                 if (block?.Code == null) continue;
-
+        
                 // Traitement de chaque bloc avec ProcessBlockWeight
                 ProcessBlockWeight(block);
                 blockCount++;
             }
-
+        
             sapi.Logger.Notification($"Processed {blockCount} blocks");
-
+        
             // Bloc pour synchroniser les données réseau
             try
             {
                 string tmpStr = JsonConvert.SerializeObject(itemIdToWeight, Formatting.Indented);
                 bArrIITW = CompressStr(tmpStr);
-
+        
                 tmpStr = JsonConvert.SerializeObject(blockIdToWeight, Formatting.Indented);
                 bArrBITW = CompressStr(tmpStr);
-
+        
                 tmpStr = JsonConvert.SerializeObject(itemBonusIdToWeight, Formatting.Indented);
                 bArrIBITW = CompressStr(tmpStr);
-
+        
                 sapi.Logger.Notification($"Network sync data prepared: Items={itemIdToWeight.Count}, Blocks={blockIdToWeight.Count}, BonusItems={itemBonusIdToWeight.Count}");
             }
             catch (Exception ex)
             {
                 sapi.Logger.Error($"Error preparing network sync: {ex.Message}");
             }
-
+        
             sapi.Logger.Notification("Finished filling weight dictionary");
+        
+            // Sauvegarde de la configuration dans le fichier JSON
+            try
+            {
+                sapi.StoreModConfig(Config, this.Mod.Info.ModID + ".json");
+                sapi.Logger.Notification("Configuration saved successfully.");
+            }
+            catch (Exception ex)
+            {
+                sapi.Logger.Error($"Failed to save configuration: {ex.Message}");
+            }
         }
 
         public void SendNewValues(IServerPlayer byPlayer)
@@ -383,19 +486,27 @@ namespace WeightMod.src
         {
             try
             {
+                sapi.Logger.Notification("Attempting to load configuration...");
+
                 Config = sapi.LoadModConfig<Config>(this.Mod.Info.ModID + ".json");
                 if (Config != null)
                 {
+                    sapi.Logger.Notification("Configuration loaded successfully.");
                     return;
                 }
+
+                sapi.Logger.Warning("Configuration file not found. Creating default configuration.");
             }
             catch (Exception ex)
             {
-                sapi.Logger.Error($"Error loading config: {ex.Message}");
+        sapi.Logger.Error($"Error loading configuration: {ex.Message}");
             }
 
+            // Créer une configuration par défaut si le fichier n'existe pas
             Config = new Config();
             sapi.StoreModConfig(Config, this.Mod.Info.ModID + ".json");
+
+            sapi.Logger.Notification("Default configuration created and saved.");
         }
 
         public override void Dispose()

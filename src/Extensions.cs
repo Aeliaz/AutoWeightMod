@@ -7,13 +7,13 @@ namespace WeightMod.src
 {
     public static class Extensions
     {
-        // Cette méthode s'assure que les attributs de l'objet ne sont pas nuls
+        // Méthode pour s'assurer que les attributs de l'objet ne sont pas nuls
         public static void EnsureAttributesNotNull(this CollectibleObject obj)
         {
             obj.Attributes ??= new JsonObject(new JObject());
         }
 
-        // Cette méthode utilise un motif wildcard pour vérifier si un objet CollectibleObject correspond au motif
+        // Méthode d'extension pour la correspondance de motif avec wildcard
         public static bool WildCardMatchExt(this CollectibleObject obj, string location)
         {
             return obj.WildCardMatch(AssetLocation.Create(location));
