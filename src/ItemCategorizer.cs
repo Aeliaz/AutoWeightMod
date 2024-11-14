@@ -1,37 +1,57 @@
+// ItemCategorizer.cs
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using WeightMod.src;
 
-namespace weightmod.src
+namespace WeightMod.src
 {
     public class ItemCategorizer
     {
+        private readonly Config config;
+        private readonly ICoreAPI api;
+
+        public ItemCategorizer(ICoreAPI api, Config config)
+        {
+            this.api = api;
+            this.config = config;
+        }
+
+        public ItemWeightInfo CategorizeAndWeigh(CollectibleObject item)
+        {
+            if (item == null) return new ItemWeightInfo { Category = "misc", Weight = 0 };
+
+            string category = DetermineCategory(item);
+            float weight = CalculateBaseWeight(item, category);
+
+            return new ItemWeightInfo
+            {
+                Category = category,
+                Weight = weight
+            };
+        }
+
         public static string DetermineCategory(CollectibleObject item)
         {
             if (item == null) return "misc";
 
-            // Check item type
+            // Vérification du type d'item
             if (item.Tool != null) return "tool";
             if (item.Code.Path.Contains("weapon")) return "weapon";
             if (item.Code.Path.Contains("armor")) return "armor";
             
-            // Check for food items by attributes
+            // Vérification des items de nourriture par attributs
             if (item.Attributes != null && 
                 (item.Code.Path.Contains("food") || 
                  item.Attributes["nutrition"].Exists)) return "food";
             
-            // Check item attributes
+            // Vérification des attributs d'item
             var attributes = item.Attributes;
             if (attributes != null)
             {
-                // Check for specific keywords in the path
                 string path = item.Code.Path.ToLower();
-                
                 if (path.Contains("ore")) return "ore";
                 if (path.Contains("ingot") || path.Contains("metal")) return "metal";
                 if (path.Contains("gem")) return "gem";
                 
-                // Check material attributes
                 string material = attributes["material"]?.AsString()?.ToLower();
                 if (!string.IsNullOrEmpty(material))
                 {
@@ -41,9 +61,9 @@ namespace weightmod.src
                 }
             }
 
-            if (item is Block)
+            // Vérification spécifique pour les blocs
+            if (item is Block block)
             {
-                var block = item as Block;
                 if (block.BlockMaterial == EnumBlockMaterial.Wood) return "woodblock";
                 if (block.BlockMaterial == EnumBlockMaterial.Stone) return "stoneblock";
                 if (block.BlockMaterial == EnumBlockMaterial.Metal) return "metalblock";
@@ -53,11 +73,13 @@ namespace weightmod.src
             return "misc";
         }
 
-        public static float CalculateBaseWeight(CollectibleObject item, string category, Config config)  // Modifié ici
+        public float CalculateBaseWeight(CollectibleObject item, string category)
         {
-            float baseWeight = config.BASE_WEIGHTS_BY_CATEGORY.ContainsKey(category) ? config.BASE_WEIGHTS_BY_CATEGORY[category] : 200f;
-            
-            // Apply material multiplier if available
+            float baseWeight = config.BASE_WEIGHTS_BY_CATEGORY.ContainsKey(category) 
+                ? config.BASE_WEIGHTS_BY_CATEGORY[category] 
+                : 200f;
+
+            // Multiplicateurs basés sur le matériau
             if (item.Attributes != null)
             {
                 string material = item.Attributes["material"]?.AsString()?.ToLower();
@@ -74,13 +96,58 @@ namespace weightmod.src
                 }
             }
 
-            // Adjust by stack size
+            // Ajustements spéciaux pour les blocs
+            if (item is Block)
+            {
+                string path = item.Code.Path.ToLower();
+                if (path.Contains("stairs") || path.Contains("slab"))
+                {
+                    baseWeight *= 0.5f;
+                }
+                else if (path.Contains("wall"))
+                {
+                    baseWeight *= 0.8f;
+                }
+                else if (path.Contains("fence") || path.Contains("gate"))
+                {
+                    baseWeight *= 0.3f;
+                }
+            }
+
+            // Ajustement pour les items stackables
             if (item.MaxStackSize > 1)
             {
-                baseWeight *= 0.8f; // Stackable items are generally smaller
+                baseWeight *= 0.8f;
             }
 
             return baseWeight;
+        }
+
+        public void ProcessAndAddToConfig(CollectibleObject item)
+        {
+            if (item?.Code == null) return;
+
+            string itemCode = item.Code.ToString();
+            var weightInfo = CategorizeAndWeigh(item);
+
+            // Log pour le debugging
+            api.Logger.Debug($"Processing item: {itemCode} - Category: {weightInfo.Category} - Weight: {weightInfo.Weight}");
+
+            // Ajouter à la configuration appropriée
+            if (item is Block)
+            {
+                if (!config.WEIGHTS_FOR_BLOCKS.ContainsKey(itemCode))
+                {
+                    config.WEIGHTS_FOR_BLOCKS[itemCode] = weightInfo;
+                }
+            }
+            else
+            {
+                if (!config.WEIGHTS_FOR_ITEMS.ContainsKey(itemCode))
+                {
+                    config.WEIGHTS_FOR_ITEMS[itemCode] = weightInfo;
+                }
+            }
         }
     }
 }
